@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SquadSync — Fullstack Collaboration Intelligence
 
 **Spotting Workload Imbalance and Integration Risk from Git and Task Data**
@@ -142,3 +143,7 @@ You can also create custom accounts at any time via `/register`.
 - `POST /api/v1/teams/{team_id}/sync` — Trigger on-demand repository audit
 - `POST /api/v1/teams/{team_id}/tasks/import` — Ingest task board CSV export
 - `POST /api/v1/teams/{team_id}/github` — Update repository connection settings
+=======
+# SquadSync
+A team collaboration analyzer that detects workload imbalance, delayed code reviews, and integration risks.
+>>>>>>> 75313608c5b1faeec2430c8388c9e084b291b2a5
