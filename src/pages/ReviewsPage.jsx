@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GitPullRequest,
   CheckCircle2,
@@ -27,6 +28,7 @@ import EvidenceInspectorModal from '../components/reviews/EvidenceInspectorModal
 import { getReviewStatusBadge, formatRelativeTime } from '../utils/formatters';
 
 export default function ReviewsPage() {
+  const navigate = useNavigate();
   const { selectedTeam, selectedTeamId } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -51,7 +53,14 @@ export default function ReviewsPage() {
   }
 
   if (error) {
-    return <ErrorState error={error} onRetry={reload} />;
+    return (
+      <ErrorState
+        error={error}
+        onRetry={reload}
+        actionLabel={error.status === 404 ? 'Configure Repository' : undefined}
+        onAction={error.status === 404 ? () => { navigate('/data-sources'); } : undefined}
+      />
+    );
   }
 
   const {
@@ -64,19 +73,21 @@ export default function ReviewsPage() {
     pull_requests_requiring_attention = []
   } = reviewsData || {};
 
-  // Filter PRs
+  // Filter PRs safely
   const filteredPrs = pull_requests_requiring_attention.filter((pr) => {
-    const matchesSearch =
-      pr.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pr.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(pr.number).includes(searchTerm) ||
-      pr.branch.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const titleMatch = (pr.title || '').toLowerCase().includes(term);
+    const authorMatch = (pr.author || pr.author_username || '').toLowerCase().includes(term);
+    const numberMatch = String(pr.number || '').includes(searchTerm);
+    const branchMatch = (pr.branch || '').toLowerCase().includes(term);
+    const matchesSearch = titleMatch || authorMatch || numberMatch || branchMatch;
 
+    const prStatus = pr.status || 'Needs Review';
     const matchesStatus =
       statusFilter === 'ALL' ||
-      (statusFilter === 'WARNINGS' && pr.has_warning) ||
-      (statusFilter === 'NEEDS_REVIEW' && pr.status === 'Needs Review') ||
-      (statusFilter === 'APPROVED' && pr.status === 'Approved');
+      (statusFilter === 'WARNINGS' && Boolean(pr.has_warning)) ||
+      (statusFilter === 'NEEDS_REVIEW' && prStatus === 'Needs Review') ||
+      (statusFilter === 'APPROVED' && prStatus === 'Approved');
 
     return matchesSearch && matchesStatus;
   });

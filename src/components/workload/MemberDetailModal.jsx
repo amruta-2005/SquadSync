@@ -38,8 +38,22 @@ export default function MemberDetailModal({ member, isOpen, onClose }) {
           <div>
             <span className="text-xs text-slate-500 font-medium">Sprint Workload Share</span>
             <div className="flex items-baseline gap-2 mt-0.5">
-              <span className="text-2xl font-bold text-slate-900">{member.estimated_workload_share}%</span>
-              <Badge variant={statusBadge.label === 'Overburdened' ? 'rose' : statusBadge.label === 'Underutilized' ? 'amber' : 'emerald'} size="sm" dot>
+              <span className="text-2xl font-bold text-slate-900">
+                {statusBadge.label === 'No Task Data' || statusBadge.label === 'Pending Invitation'
+                  ? statusBadge.label === 'Pending Invitation' ? 'Not accepted' : 'No task data'
+                  : `${member.estimated_workload_share}%`}
+              </span>
+              <Badge
+                variant={
+                  statusBadge.label === 'Overburdened'
+                    ? 'rose'
+                    : statusBadge.label === 'Underutilized' || statusBadge.label === 'Pending Invitation'
+                    ? 'amber'
+                    : statusBadge.label === 'No Task Data' ? 'default' : 'emerald'
+                }
+                size="sm"
+                dot
+              >
                 {statusBadge.label}
               </Badge>
             </div>

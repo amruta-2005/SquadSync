@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GitMerge,
   AlertTriangle,
@@ -27,6 +28,7 @@ import EmptyState from '../components/common/EmptyState';
 import { getRiskLevelBadge } from '../utils/formatters';
 
 export default function IntegrationRiskPage() {
+  const navigate = useNavigate();
   const { selectedTeam, selectedTeamId } = useApp();
   const [severityFilter, setSeverityFilter] = useState('ALL');
 
@@ -49,7 +51,14 @@ export default function IntegrationRiskPage() {
   }
 
   if (error) {
-    return <ErrorState error={error} onRetry={reload} />;
+    return (
+      <ErrorState
+        error={error}
+        onRetry={reload}
+        actionLabel={error.status === 404 ? 'Configure Repository' : undefined}
+        onAction={error.status === 404 ? () => { navigate('/data-sources'); } : undefined}
+      />
+    );
   }
 
   const {
@@ -62,7 +71,8 @@ export default function IntegrationRiskPage() {
 
   const filteredRisks = risks.filter((r) => {
     if (severityFilter === 'ALL') return true;
-    return r.severity.toUpperCase() === severityFilter;
+    const sev = (r.severity || r.risk_level || '').toUpperCase();
+    return sev === severityFilter;
   });
 
   return (

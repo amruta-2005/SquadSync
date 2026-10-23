@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -27,6 +28,7 @@ import { getWorkloadStatusBadge, formatRelativeTime } from '../utils/formatters'
 
 export default function WorkloadPage() {
   const { selectedTeam, selectedTeamId } = useApp();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedMember, setSelectedMember] = useState(null);
@@ -50,21 +52,45 @@ export default function WorkloadPage() {
   }
 
   if (error) {
-    return <ErrorState error={error} onRetry={reload} />;
+    return (
+      <ErrorState
+        error={error}
+        onRetry={reload}
+        actionLabel={error.status === 404 ? 'Configure Repository' : 'Retry'}
+        onAction={() => {
+          if (error.status === 404) {
+            navigate('/data-sources');
+          } else {
+            reload();
+          }
+        }}
+      />
+    );
   }
 
   const members = workloadData?.members || [];
 
-  // Filter members by search and status
-  const filteredMembers = members.filter((m) => {
-    const matchesSearch =
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.github_username.toLowerCase().includes(searchTerm.toLowerCase());
+  if (members.length === 0 && !loading) {
+    return (
+      <EmptyState
+        title="No Contributors Found"
+        description="Connect a repository with active contributors or synchronize repository data in Data Sources."
+        actionLabel="Go to Data Sources"
+        onAction={() => navigate('/data-sources')}
+      />
+    );
+  }
 
-    const matchesStatus =
-      statusFilter === 'ALL' ||
-      m.workload_status.toUpperCase() === statusFilter;
+  // Filter members by search and status safely
+  const filteredMembers = members.filter((m) => {
+    const term = searchTerm.toLowerCase();
+    const nameMatch = (m.name || '').toLowerCase().includes(term);
+    const roleMatch = (m.role || '').toLowerCase().includes(term);
+    const githubMatch = (m.github_username || '').toLowerCase().includes(term);
+    const matchesSearch = nameMatch || roleMatch || githubMatch;
+
+    const memberStatus = (m.workload_status || 'BALANCED').toUpperCase();
+    const matchesStatus = statusFilter === 'ALL' || memberStatus === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
@@ -110,7 +136,7 @@ export default function WorkloadPage() {
       {/* Bar Chart Section */}
       <Card
         title="Workload Share Comparison"
-        subtitle="Comparing estimated workload share, story points, and task throughput across all team members"
+        subtitle="Comparing tracked repository accounts; pending invitations are listed but are not treated as active workload"
       >
         <WorkloadBarChart members={members} />
       </Card>
@@ -128,9 +154,9 @@ export default function WorkloadPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-500 font-medium">Status:</span>
-          {['ALL', 'OVERBURDENED', 'BALANCED', 'UNDERUTILIZED'].map((status) => (
+          {['ALL', 'OVERBURDENED', 'BALANCED', 'UNDERUTILIZED', 'NO TASK DATA', 'PENDING INVITATION'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -176,16 +202,20 @@ export default function WorkloadPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-sm shrink-0">
-                            {member.name.split(' ').map(n => n[0]).join('')}
+                            {(member.name || 'User').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || 'U'}
                           </div>
                           <div>
                             <span className="font-bold text-slate-900 group-hover:text-purple-700 transition-colors">
-                              {member.name}
+                              {member.name || 'Unnamed Member'}
                             </span>
                             <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                              <span>{member.role}</span>
+                              <span>{member.role || 'Member'}</span>
                               <span>•</span>
-                              <span className="font-mono text-purple-600">@{member.github_username}</span>
+                              {member.github_username ? (
+                                <span className="font-mono text-purple-600">@{member.github_username}</span>
+                              ) : (
+                                <span className="text-amber-600 italic">Unmapped GitHub</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -209,29 +239,35 @@ export default function WorkloadPage() {
 
                       {/* Estimated Workload Share with Progress Bar */}
                       <td className="px-6 py-4">
-                        <div className="w-36 space-y-1.5">
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="font-bold text-slate-800">{member.estimated_workload_share}%</span>
-                            <span className="text-slate-400">of team</span>
+                        {member.workload_status === 'No Task Data' || member.workload_status === 'Pending Invitation' ? (
+                          <span className="text-slate-400 italic">
+                            {member.workload_status === 'Pending Invitation' ? 'Not accepted' : 'No task data'}
+                          </span>
+                        ) : (
+                          <div className="w-36 space-y-1.5">
+                            <div className="flex justify-between items-center text-[11px]">
+                              <span className="font-bold text-slate-800">{member.estimated_workload_share}%</span>
+                              <span className="text-slate-400">of team</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  member.estimated_workload_share > 35
+                                    ? 'bg-rose-500'
+                                    : member.estimated_workload_share < 15
+                                    ? 'bg-amber-400'
+                                    : 'bg-purple-600'
+                                }`}
+                                style={{ width: `${Math.min(member.estimated_workload_share * 1.5, 100)}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                member.estimated_workload_share > 35
-                                  ? 'bg-rose-500'
-                                  : member.estimated_workload_share < 15
-                                  ? 'bg-amber-400'
-                                  : 'bg-purple-600'
-                              }`}
-                              style={{ width: `${Math.min(member.estimated_workload_share * 1.5, 100)}%` }}
-                            />
-                          </div>
-                        </div>
+                        )}
                       </td>
 
                       {/* Recent GitHub Activity */}
                       <td className="px-6 py-4">
-                        {member.github_activity ? (
+                        {member.github_activity && (member.github_activity.commits_last_14d || member.github_activity.prs_opened || member.github_activity.last_active) ? (
                           <div className="space-y-1 text-[11px] text-slate-600">
                             <div className="flex items-center gap-2">
                               <span className="flex items-center gap-1">
@@ -259,8 +295,10 @@ export default function WorkloadPage() {
                           variant={
                             statusBadge.label === 'Overburdened'
                               ? 'rose'
-                              : statusBadge.label === 'Underutilized'
+                              : statusBadge.label === 'Underutilized' || statusBadge.label === 'Pending Invitation'
                               ? 'amber'
+                              : statusBadge.label === 'No Task Data'
+                              ? 'default'
                               : 'emerald'
                           }
                           size="sm"

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layers,
   User,
@@ -15,10 +15,15 @@ import {
 import { useAuth } from '../auth/AuthProvider';
 import PasswordInput from '../components/auth/PasswordInput';
 import Button from '../components/common/Button';
+import apiService from '../services/api';
 
 export default function Register() {
   const { register, clearAuthError, authError, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const searchParams = new URLSearchParams(location.search);
+  const inviteToken = searchParams.get('invitation');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -27,6 +32,28 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [invitationInfo, setInvitationInfo] = useState(null);
+
+  // Check invitation token if present in URL
+  useEffect(() => {
+    if (inviteToken) {
+      apiService.getInvitationByToken(inviteToken)
+        .then((res) => {
+          if (res?.data) {
+            setInvitationInfo(res.data);
+            if (res.data.email) {
+              setEmail(res.data.email);
+            }
+            if (res.data.role) {
+              setRole(res.data.role);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to load invitation token:', err);
+        });
+    }
+  }, [inviteToken]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,6 +80,13 @@ export default function Register() {
     setSubmitting(true);
     try {
       await register(name, email, password, role);
+      if (inviteToken) {
+        try {
+          await apiService.acceptInvitationByToken(inviteToken);
+        } catch (inviteErr) {
+          console.warn('Invitation token accept notice:', inviteErr);
+        }
+      }
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setLocalError(err.message || 'Failed to register account.');
@@ -129,6 +163,21 @@ export default function Register() {
                 Start tracking workload equity and code integration risk.
               </p>
             </div>
+
+            {/* Invitation Notice Banner if token provided */}
+            {invitationInfo && (
+              <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-xs flex items-start gap-3 animate-in fade-in-50 duration-150">
+                <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-bold text-purple-900 block">
+                    Team Invitation: {invitationInfo.team_name}
+                  </span>
+                  <p className="text-purple-800 leading-relaxed">
+                    You have been invited to join <span className="font-semibold">{invitationInfo.team_name}</span> as a <span className="font-semibold">{invitationInfo.role}</span>. Register below to accept the invitation and access the project workspace.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {(localError || authError) && (
               <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5 animate-in fade-in-50 duration-150">
@@ -251,7 +300,7 @@ export default function Register() {
           <div className="mt-8 pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
             Already have an account?{' '}
             <Link
-              to="/login"
+              to={inviteToken ? `/login?invitation=${inviteToken}` : '/login'}
               className="font-bold text-purple-600 hover:text-purple-800 hover:underline"
             >
               Sign In

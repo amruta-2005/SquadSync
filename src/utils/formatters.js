@@ -112,6 +112,24 @@ export function getRiskLevelBadge(level) {
 
 export function getWorkloadStatusBadge(status) {
   const norm = String(status || '').toLowerCase();
+  if (norm.includes('pending invitation')) {
+    return {
+      label: 'Pending Invitation',
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+      border: 'border-amber-200',
+      dot: 'bg-amber-500'
+    };
+  }
+  if (norm.includes('no task data')) {
+    return {
+      label: 'No Task Data',
+      bg: 'bg-slate-100',
+      text: 'text-slate-600',
+      border: 'border-slate-200',
+      dot: 'bg-slate-400'
+    };
+  }
   if (norm.includes('overburden') || norm.includes('high') || norm.includes('heavy')) {
     return {
       label: 'Overburdened',

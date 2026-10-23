@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Database,
   Github,
@@ -12,7 +12,11 @@ import {
   Clock,
   ArrowRight,
   Download,
-  AlertCircle
+  AlertCircle,
+  Key,
+  Eye,
+  EyeOff,
+  ExternalLink
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useApi } from '../hooks/useApi';
@@ -22,16 +26,20 @@ import Badge from '../components/common/Badge';
 import Button from '../components/common/Button';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import ErrorState from '../components/common/ErrorState';
+import ContributorMappingCard from '../components/team/ContributorMappingCard';
 import { formatDateTime } from '../utils/formatters';
 
 export default function DataSourcesPage() {
-  const { selectedTeam, selectedTeamId, isDemoMode, addToast } = useApp();
+  const { selectedTeam, selectedTeamId, isDemoMode, addToast, refreshTeams } = useApp();
 
   // GitHub Form state
-  const [repoOwner, setRepoOwner] = useState(selectedTeam?.repo_name?.split('/')[0] || 'squadsync-org');
-  const [repoName, setRepoName] = useState(selectedTeam?.repo_name?.split('/')[1] || 'devpulse-capstone');
+  const [repoOwner, setRepoOwner] = useState('');
+  const [repoName, setRepoName] = useState('');
   const [branch, setBranch] = useState('main');
+  const [githubToken, setGithubToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [isSavingRepo, setIsSavingRepo] = useState(false);
+  const [hasTokenOnServer, setHasTokenOnServer] = useState(false);
 
   // CSV upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -46,6 +54,30 @@ export default function DataSourcesPage() {
     reload
   } = useApi((teamId, forceDemo) => apiService.getSyncStatus(teamId, forceDemo));
 
+  // Initialize repo input fields from current team or repo-info
+  useEffect(() => {
+    async function loadCurrentRepo() {
+      try {
+        const info = await apiService.getRepoInfo(selectedTeamId, isDemoMode);
+        if (info && info.data) {
+          setRepoOwner(info.data.repo_owner || '');
+          setRepoName(info.data.repo_name || '');
+          setBranch(info.data.default_branch || 'main');
+          setHasTokenOnServer(!!info.data.has_token);
+        } else if (selectedTeam?.repo_name) {
+          const parts = selectedTeam.repo_name.split('/');
+          if (parts.length === 2) {
+            setRepoOwner(parts[0]);
+            setRepoName(parts[1]);
+          }
+        }
+      } catch {
+        // use defaults
+      }
+    }
+    loadCurrentRepo();
+  }, [selectedTeamId, selectedTeam?.repo_name, isDemoMode]);
+
   const handleConnectRepo = async (e) => {
     e.preventDefault();
     if (!repoOwner.trim() || !repoName.trim()) {
@@ -57,10 +89,20 @@ export default function DataSourcesPage() {
     try {
       const res = await apiService.connectRepository(
         selectedTeamId,
-        { repo_owner: repoOwner.trim(), repo_name: repoName.trim(), branch: branch.trim() },
+        {
+          repo_owner: repoOwner.trim(),
+          repo_name: repoName.trim(),
+          branch: branch.trim() || 'main',
+          github_token: githubToken.trim() || null
+        },
         isDemoMode
       );
       addToast(res.message || 'Repository connected successfully!', 'success');
+      if (githubToken.trim()) {
+        setHasTokenOnServer(true);
+        setGithubToken('');
+      }
+      await refreshTeams();
       reload();
     } catch (err) {
       addToast(`Failed to connect repository: ${err.message}`, 'error');
@@ -104,6 +146,7 @@ export default function DataSourcesPage() {
     try {
       const res = await apiService.triggerSync(selectedTeamId, isDemoMode);
       addToast(res.message || 'Analysis refreshed successfully!', 'success');
+      await refreshTeams();
       reload();
     } catch (err) {
       addToast(`Sync failed: ${err.message}`, 'error');
@@ -115,11 +158,10 @@ export default function DataSourcesPage() {
   const handleDownloadSampleCsv = () => {
     const csvContent =
       "task_id,title,assignee_github_username,story_points,status,due_date\n" +
-      "TASK-101,Implement JWT refresh token rotation,alexchen-dev,5,In Progress,2026-10-25\n" +
-      "TASK-102,Build responsive team workload dashboard view,mayapatel-ui,5,Completed,2026-10-20\n" +
-      "TASK-103,FastAPI endpoint for integration risk calculation,marcus-backend,5,Completed,2026-10-21\n" +
-      "TASK-104,Database schema migration for multi-tenancy,alexchen-dev,8,Overdue,2026-10-19\n" +
-      "TASK-105,End-to-end Cypress test suite for auth flow,priya-qa,3,Overdue,2026-10-22\n";
+      "TASK-101,Implement JWT refresh token rotation,octocat,5,In Progress,2026-10-25\n" +
+      "TASK-102,Build responsive team workload dashboard view,octocat,5,Completed,2026-10-20\n" +
+      "TASK-103,FastAPI endpoint for integration risk calculation,octocat,5,Completed,2026-10-21\n" +
+      "TASK-104,Database schema migration for multi-tenancy,octocat,8,Overdue,2026-10-19\n";
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -149,10 +191,10 @@ export default function DataSourcesPage() {
   const {
     repository = `${repoOwner}/${repoName}`,
     default_branch = 'main',
-    connection_type = 'Backend-Managed GitHub App',
+    connection_type = 'GitHub REST API (Secure Backend)',
     last_synced_at,
-    status = 'success',
-    sync_duration_seconds = 3.5,
+    status = 'not_configured',
+    sync_duration_seconds = 2.1,
     records_processed = {},
     validation_errors = []
   } = syncStatusData || {};
@@ -171,7 +213,7 @@ export default function DataSourcesPage() {
             )}
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Manage repository connection, task-board CSV imports, and inspect sync validation logs for <span className="font-semibold text-slate-800">{selectedTeam?.name}</span>
+            Connect your real GitHub repository, manage task-board CSV imports, and inspect sync logs for <span className="font-semibold text-slate-800">{selectedTeam?.name}</span>
           </p>
         </div>
 
@@ -182,7 +224,7 @@ export default function DataSourcesPage() {
           loading={isSyncing}
           onClick={handleTriggerSync}
         >
-          Refresh Analysis Now
+          Sync Data Now
         </Button>
       </div>
 
@@ -191,19 +233,34 @@ export default function DataSourcesPage() {
         {/* GitHub Repository Connection */}
         <Card
           title="GitHub Repository Connection"
-          subtitle="Configure repository owner and tracked branches"
+          subtitle="Configure repository owner, name, and optional token"
+          headerAction={
+            repoOwner && repoName ? (
+              <a
+                href={`https://github.com/${repoOwner}/${repoName}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-2xs"
+                title="Open repository in new tab"
+              >
+                <Github className="w-3.5 h-3.5 text-slate-700" />
+                <span>Open on GitHub</span>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </a>
+            ) : null
+          }
         >
           <form onSubmit={handleConnectRepo} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Repository Owner / Org
+                  Repository Owner / Org <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={repoOwner}
                   onChange={(e) => setRepoOwner(e.target.value)}
-                  placeholder="e.g., squadsync-org"
+                  placeholder="e.g., octocat or amruta-2005"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
@@ -211,13 +268,13 @@ export default function DataSourcesPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Repository Name
+                  Repository Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={repoName}
                   onChange={(e) => setRepoName(e.target.value)}
-                  placeholder="e.g., devpulse-capstone"
+                  placeholder="e.g., Hello-World or SquadSync"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
@@ -226,7 +283,7 @@ export default function DataSourcesPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Target Main Branch
+                Target Default Branch
               </label>
               <input
                 type="text"
@@ -237,13 +294,47 @@ export default function DataSourcesPage() {
               />
             </div>
 
-            {/* Crucial Security Notice */}
+            {/* Optional Personal Access Token */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-slate-500" />
+                  GitHub Personal Access Token (Recommended if rate-limited)
+                </label>
+                {hasTokenOnServer && (
+                  <Badge variant="emerald" size="sm">
+                    Token Saved On Server
+                  </Badge>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showToken ? 'text' : 'password'}
+                  value={githubToken}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  placeholder={hasTokenOnServer ? '•••••••••••••••••••••••• (Leave blank to keep current)' : 'ghp_... (Optional for public repositories)'}
+                  className="w-full px-3 py-2 pr-10 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Public repositories can be read without a token, but GitHub limits unauthenticated requests to 60 per hour. A token restores API access; listing collaborators also requires your GitHub account to have write, maintain, or admin access. Classic tokens need <code className="bg-slate-100 px-1 py-0.5 rounded">repo</code> and <code className="bg-slate-100 px-1 py-0.5 rounded">read:org</code> scopes. Fine-grained tokens must grant the permissions GitHub reports for collaborator listing. Tokens are stored only on the backend.
+              </p>
+            </div>
+
+            {/* Security Notice */}
             <div className="bg-purple-50/70 border border-purple-200 rounded-lg p-3 text-xs text-purple-900 flex items-start gap-2.5">
               <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-purple-950 block">Backend-Managed Security:</span>
+                <span className="font-semibold text-purple-950 block">Server-Side Security:</span>
                 <span className="text-purple-800 leading-relaxed">
-                  SquadSync uses server-side GitHub App tokens. You are never asked to paste a Personal Access Token into frontend forms or store API keys in browser local storage.
+                  Your credentials are never stored in browser storage (localStorage/cookies) and are never exposed in API responses or git commits.
                 </span>
               </div>
             </div>
@@ -254,7 +345,7 @@ export default function DataSourcesPage() {
               loading={isSavingRepo}
               className="w-full"
             >
-              Update Repository Settings
+              Validate & Save Repository
             </Button>
           </form>
         </Card>
@@ -274,7 +365,6 @@ export default function DataSourcesPage() {
           }
         >
           <div className="space-y-4">
-            {/* Drag & Drop Area */}
             <div className="border-2 border-dashed border-slate-200 hover:border-purple-300 rounded-xl p-6 text-center transition-colors bg-slate-50/50">
               <FileSpreadsheet className="w-10 h-10 text-purple-600 mx-auto mb-2" />
               <p className="text-xs font-semibold text-slate-800">
@@ -325,6 +415,9 @@ export default function DataSourcesPage() {
         </Card>
       </div>
 
+      {/* Team Members & Contributor Mapping */}
+      <ContributorMappingCard teamId={selectedTeamId} onDataChanged={reload} />
+
       {/* Sync Status & Metrics Card */}
       <Card
         title="Latest Synchronization Status"
@@ -332,9 +425,9 @@ export default function DataSourcesPage() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-6 border-b border-slate-100">
           <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/70">
-            <span className="text-[11px] text-slate-500 block">Job Status</span>
+            <span className="text-[11px] text-slate-500 block">Connection Status</span>
             <div className="mt-1 flex items-center gap-2">
-              <Badge variant={status === 'success' ? 'emerald' : 'rose'} size="sm" dot>
+              <Badge variant={status === 'success' ? 'emerald' : status === 'configured' ? 'blue' : 'rose'} size="sm" dot>
                 {status.toUpperCase()}
               </Badge>
               <span className="text-xs text-slate-500">in {sync_duration_seconds}s</span>
@@ -344,21 +437,24 @@ export default function DataSourcesPage() {
           <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/70">
             <span className="text-[11px] text-slate-500 block">Last Synced</span>
             <span className="text-xs font-bold text-slate-900 mt-1 block">
-              {formatDateTime(last_synced_at)}
+              {last_synced_at ? formatDateTime(last_synced_at) : 'Never synced'}
             </span>
           </div>
 
           <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/70">
-            <span className="text-[11px] text-slate-500 block">GitHub Records</span>
+            <span className="text-[11px] text-slate-500 block">Repository Contributors</span>
             <span className="text-xs font-bold text-slate-900 mt-1 block">
-              {records_processed.commits || 0} commits • {records_processed.pull_requests || 0} PRs
+              {records_processed?.github_contributors ?? 0} commit contributors · {records_processed?.github_collaborators ?? 0} collaborators · {records_processed?.github_invitations ?? 0} pending invites
+            </span>
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              {records_processed?.team_members ?? records_processed?.members ?? 0} SquadSync team members · {records_processed?.pull_requests || 0} PRs
             </span>
           </div>
 
           <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/70">
-            <span className="text-[11px] text-slate-500 block">Task Board Records</span>
+            <span className="text-[11px] text-slate-500 block">Tasks Mapped</span>
             <span className="text-xs font-bold text-slate-900 mt-1 block">
-              {records_processed.tasks_imported || 0} tasks mapped
+              {records_processed?.tasks || 0} issues/tasks tracked
             </span>
           </div>
         </div>
@@ -368,54 +464,23 @@ export default function DataSourcesPage() {
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600" />
-              Data Validation Warnings & Mappings ({validation_errors.length})
+              Diagnostics & Status ({validation_errors?.length || 0})
             </h4>
-            <span className="text-xs text-slate-400">
-              Automatic normalization applied
-            </span>
           </div>
 
-          {validation_errors.length > 0 ? (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-2.5 font-medium">Severity</th>
-                    <th className="px-4 py-2.5 font-medium">Field</th>
-                    <th className="px-4 py-2.5 font-medium">Item</th>
-                    <th className="px-4 py-2.5 font-medium">Description</th>
-                    <th className="px-4 py-2.5 font-medium">System Remedy</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {validation_errors.map((err) => (
-                    <tr key={err.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3">
-                        <Badge variant={err.severity === 'warning' ? 'amber' : 'blue'} size="sm">
-                          {err.severity}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 font-mono font-medium text-slate-700">
-                        {err.field}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">
-                        {err.item}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {err.message}
-                      </td>
-                      <td className="px-4 py-3 text-purple-700 font-medium">
-                        {err.remedy}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {(validation_errors && validation_errors.length > 0) ? (
+            <div className="space-y-2">
+              {validation_errors.map((item, idx) => (
+                <div key={idx} className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>{typeof item === 'string' ? item : item.message || JSON.stringify(item)}</span>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
               <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
-              All GitHub handles and task board IDs were cleanly mapped without errors.
+              Repository is connected and data synchronized without errors.
             </div>
           )}
         </div>

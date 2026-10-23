@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 
 /**
  * Custom hook to fetch data using an apiService method.
  * Handles loading, error, retry, and demo mode flags automatically.
+ * Uses a ref for fetchFn to prevent infinite re-render loops when inline functions are passed.
  *
  * @param {Function} fetchFn - Function returning a promise: (teamId, isDemoMode) => Promise<{ data, isDemo }>
  * @param {Array} deps - Additional dependencies to trigger refetch
@@ -15,12 +16,18 @@ export function useApi(fetchFn, deps = []) {
   const [error, setError] = useState(null);
   const [isDemo, setIsDemo] = useState(isDemoMode);
 
+  const fetchFnRef = useRef(fetchFn);
+  fetchFnRef.current = fetchFn;
+
   const execute = useCallback(async () => {
-    if (!selectedTeamId) return;
+    if (!selectedTeamId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchFn(selectedTeamId, isDemoMode);
+      const res = await fetchFnRef.current(selectedTeamId, isDemoMode);
       setData(res.data);
       setIsDemo(!!res.isDemo);
     } catch (err) {
@@ -30,7 +37,8 @@ export function useApi(fetchFn, deps = []) {
     } finally {
       setLoading(false);
     }
-  }, [selectedTeamId, isDemoMode, fetchFn, ...deps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeamId, isDemoMode, ...deps]);
 
   useEffect(() => {
     execute();

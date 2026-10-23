@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -26,6 +27,7 @@ import Modal from '../components/common/Modal';
 import { getRiskLevelBadge, formatDateTime, formatRelativeTime } from '../utils/formatters';
 
 export default function RisksPage() {
+  const navigate = useNavigate();
   const { selectedTeam, selectedTeamId } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -51,24 +53,32 @@ export default function RisksPage() {
   }
 
   if (error) {
-    return <ErrorState error={error} onRetry={reload} />;
+    return (
+      <ErrorState
+        error={error}
+        onRetry={reload}
+        actionLabel={error.status === 404 ? 'Configure Repository' : undefined}
+        onAction={error.status === 404 ? () => { navigate('/data-sources'); } : undefined}
+      />
+    );
   }
 
   const risks = Array.isArray(risksData) ? risksData : (risksData?.risks || []);
 
   const filteredRisks = risks.filter((r) => {
-    const matchesSearch =
-      r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.explanation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const titleMatch = (r.title || '').toLowerCase().includes(term);
+    const explanationMatch = (r.explanation || r.description || '').toLowerCase().includes(term);
+    const idMatch = (r.id || r.identifier || '').toLowerCase().includes(term);
+    const matchesSearch = titleMatch || explanationMatch || idMatch;
 
+    const cat = (r.category || '').toUpperCase();
     const matchesCategory =
-      categoryFilter === 'ALL' ||
-      r.category.toUpperCase().includes(categoryFilter);
+      categoryFilter === 'ALL' || cat.includes(categoryFilter);
 
+    const sev = (r.risk_level || r.severity || 'LOW').toUpperCase();
     const matchesSeverity =
-      severityFilter === 'ALL' ||
-      r.risk_level.toUpperCase() === severityFilter;
+      severityFilter === 'ALL' || sev === severityFilter;
 
     return matchesSearch && matchesCategory && matchesSeverity;
   });

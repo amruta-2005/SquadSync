@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
+  CheckSquare,
   Users,
   GitPullRequest,
   GitMerge,
@@ -20,6 +21,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const navigation = [
     { name: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+    { name: 'Tasks', to: '/tasks', icon: CheckSquare },
     { name: 'Team Workload', to: '/workload', icon: Users },
     { name: 'Review Analysis', to: '/reviews', icon: GitPullRequest },
     { name: 'Integration Risk', to: '/integration-risks', icon: GitMerge },
@@ -45,16 +47,44 @@ export default function Sidebar({ isOpen, onClose }) {
       >
         <div className="p-4 space-y-6 overflow-y-auto">
           {/* Active repository chip */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-              <Github className="w-4 h-4 text-slate-700" />
-              <span className="truncate">{selectedTeam?.repo_name || 'No repo connected'}</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
-              <span>{selectedTeam?.academic_term || 'Student Team'}</span>
-              <span className="text-purple-600 font-medium">Tracking</span>
-            </p>
-          </div>
+          {selectedTeam?.repo_name && selectedTeam.repo_name !== 'No Repository Connected' ? (
+            <a
+              href={`https://github.com/${selectedTeam.repo_name}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group block bg-slate-50 hover:bg-purple-50/50 border border-slate-200/80 hover:border-purple-200 rounded-xl p-3 transition-colors"
+              title="Open repository on GitHub"
+            >
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800 group-hover:text-purple-700">
+                <div className="flex items-center gap-2 truncate">
+                  <Github className="w-4 h-4 text-slate-700 group-hover:text-purple-600 shrink-0" />
+                  <span className="truncate">{selectedTeam.repo_name}</span>
+                </div>
+                <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-purple-600 shrink-0" />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+                <span>{selectedTeam?.academic_term || 'Student Team'}</span>
+                <span className="text-purple-600 font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Tracking
+                </span>
+              </p>
+            </a>
+          ) : (
+            <NavLink
+              to="/data-sources"
+              className="group block bg-slate-50 hover:bg-purple-50/50 border border-dashed border-slate-300 hover:border-purple-300 rounded-xl p-3 transition-colors"
+              title="Connect GitHub repository"
+            >
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 group-hover:text-purple-700">
+                <Github className="w-4 h-4 text-slate-400 group-hover:text-purple-600" />
+                <span className="truncate">Connect GitHub Repo</span>
+              </div>
+              <p className="text-[11px] text-purple-600 font-medium mt-1">
+                + Configure in Data Sources
+              </p>
+            </NavLink>
+          )}
 
           {/* Nav links */}
           <nav className="space-y-1">

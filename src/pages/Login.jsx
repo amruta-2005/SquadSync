@@ -18,20 +18,43 @@ import { useAuth } from '../auth/AuthProvider';
 import PasswordInput from '../components/auth/PasswordInput';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
+import apiService from '../services/api';
 
 export default function Login() {
   const { login, isAuthenticated, authError, clearAuthError, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const searchParams = new URLSearchParams(location.search);
+  const inviteToken = searchParams.get('invitation');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [invitationInfo, setInvitationInfo] = useState(null);
 
   // Destination after login
   const from = location.state?.from?.pathname || '/dashboard';
+
+  // Check invitation token if present in URL
+  useEffect(() => {
+    if (inviteToken) {
+      apiService.getInvitationByToken(inviteToken)
+        .then((res) => {
+          if (res?.data) {
+            setInvitationInfo(res.data);
+            if (res.data.email) {
+              setEmail(res.data.email);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to load invitation token:', err);
+        });
+    }
+  }, [inviteToken]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -56,6 +79,13 @@ export default function Login() {
     setSubmitting(true);
     try {
       await login(email, password, rememberMe);
+      if (inviteToken) {
+        try {
+          await apiService.acceptInvitationByToken(inviteToken);
+        } catch (inviteErr) {
+          console.warn('Invitation token accept notice:', inviteErr);
+        }
+      }
       navigate(from, { replace: true });
     } catch (err) {
       setLocalError(err.message || 'Invalid email or password.');
@@ -172,6 +202,21 @@ export default function Login() {
               </p>
             </div>
 
+            {/* Invitation Notice Banner if token provided */}
+            {invitationInfo && (
+              <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-xs flex items-start gap-3 animate-in fade-in-50 duration-150">
+                <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-bold text-purple-900 block">
+                    Team Invitation: {invitationInfo.team_name}
+                  </span>
+                  <p className="text-purple-800 leading-relaxed">
+                    You have been invited to join <span className="font-semibold">{invitationInfo.team_name}</span> as a <span className="font-semibold">{invitationInfo.role}</span>. Sign in or register below to join the workspace.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Error Notification Banner */}
             {(localError || authError) && (
               <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5 animate-in fade-in-50 duration-150">
@@ -255,30 +300,38 @@ export default function Login() {
                 </span>
                 <span className="text-[10px] text-purple-600 font-medium">1-Click Fill</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('alex.chen@squadsync.edu', 'SquadSync2026!')}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 text-left transition-colors"
+                  onClick={() => handleQuickDemo('amrutasomvanshi08@gmail.com', 'SquadSync2026!')}
+                  className="px-2.5 py-1.5 rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-100/60 text-left transition-colors"
                 >
-                  <span className="font-bold text-slate-800 block truncate">Alex Chen</span>
-                  <span className="text-[10px] text-slate-400 block truncate">Team Lead</span>
+                  <span className="font-bold text-purple-900 block truncate">Amruta</span>
+                  <span className="text-[10px] text-purple-600 font-semibold block truncate">Team Lead</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('maya.patel@squadsync.edu', 'SquadSync2026!')}
+                  onClick={() => handleQuickDemo('prathamesh.wandhare@squadsync.edu', 'SquadSync2026!')}
                   className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 text-left transition-colors"
                 >
-                  <span className="font-bold text-slate-800 block truncate">Maya Patel</span>
-                  <span className="text-[10px] text-slate-400 block truncate">Developer</span>
+                  <span className="font-bold text-slate-800 block truncate">Prathamesh W.</span>
+                  <span className="text-[10px] text-slate-500 block truncate">Fullstack</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('mentor@squadsync.edu', 'SquadSync2026!')}
+                  onClick={() => handleQuickDemo('madhavi.pant@squadsync.edu', 'SquadSync2026!')}
                   className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 text-left transition-colors"
                 >
-                  <span className="font-bold text-slate-800 block truncate">Dr. Vance</span>
-                  <span className="text-[10px] text-slate-400 block truncate">Mentor</span>
+                  <span className="font-bold text-slate-800 block truncate">Madhavi Pant</span>
+                  <span className="text-[10px] text-slate-500 block truncate">Frontend</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo('siddhi.shinde@squadsync.edu', 'SquadSync2026!')}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-purple-300 hover:bg-purple-50/50 text-left transition-colors"
+                >
+                  <span className="font-bold text-slate-800 block truncate">Siddhi Shinde</span>
+                  <span className="text-[10px] text-slate-500 block truncate">Backend</span>
                 </button>
               </div>
             </div>
@@ -288,7 +341,7 @@ export default function Login() {
           <div className="mt-8 pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
             Don't have an account yet?{' '}
             <Link
-              to="/register"
+              to={inviteToken ? `/register?invitation=${inviteToken}` : '/register'}
               className="font-bold text-purple-600 hover:text-purple-800 hover:underline"
             >
               Create SquadSync Account
