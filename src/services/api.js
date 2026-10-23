@@ -5,6 +5,7 @@
  */
 
 import { DEMO_TEAMS, DEMO_DATA } from './demoData';
+import authService from '../auth/authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -27,12 +28,15 @@ class ApiService {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
 
+    const authHeaders = authService.getAuthHeaders();
+
     try {
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
+          ...authHeaders,
           ...(options.headers || {})
         }
       });

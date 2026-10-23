@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   GitPullRequest,
   RefreshCw,
@@ -10,9 +10,13 @@ import {
   Menu,
   X,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  LogOut,
+  User,
+  Sliders
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../auth/AuthProvider';
 import Button from '../common/Button';
 import Badge from '../common/Badge';
 import apiService from '../../services/api';
@@ -30,9 +34,12 @@ export default function Navbar({ onToggleMobileSidebar, isMobileSidebarOpen }) {
     addToast
   } = useApp();
 
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
-  const location = useLocation();
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const handleTriggerSync = async () => {
     setIsSyncing(true);
@@ -44,6 +51,13 @@ export default function Navbar({ onToggleMobileSidebar, isMobileSidebarOpen }) {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleSignOut = async () => {
+    setShowUserDropdown(false);
+    await logout();
+    addToast('You have been signed out.', 'info');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -116,7 +130,7 @@ export default function Navbar({ onToggleMobileSidebar, isMobileSidebarOpen }) {
           )}
         </div>
 
-        {/* Right: Backend Status & Actions */}
+        {/* Right: Backend Status & Actions & User Profile */}
         <div className="flex items-center gap-2.5">
           {/* Backend Status indicator */}
           <div className="hidden md:flex items-center gap-2">
@@ -155,12 +169,81 @@ export default function Navbar({ onToggleMobileSidebar, isMobileSidebarOpen }) {
             Sync Data
           </Button>
 
-          {/* Connect Repo CTA shortcut */}
-          <Link to="/data-sources">
-            <Button size="sm" variant="primary">
-              Connect Repo
-            </Button>
-          </Link>
+          {/* User Profile Menu or Sign In CTA */}
+          {isAuthenticated && user ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center gap-2 p-1 pl-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors"
+                aria-label="User account menu"
+              >
+                <div className="w-7 h-7 rounded-lg bg-purple-600 text-white font-bold text-xs flex items-center justify-center overflow-hidden">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    user.name?.charAt(0) || 'U'
+                  )}
+                </div>
+                <div className="text-left hidden sm:block pr-1">
+                  <span className="text-xs font-bold text-slate-900 block leading-tight max-w-[110px] truncate">
+                    {user.name}
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-medium block leading-tight truncate">
+                    {user.role || 'Member'}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 mr-1" />
+              </button>
+
+              {showUserDropdown && (
+                <div
+                  className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in-50 duration-150"
+                  onClick={() => setShowUserDropdown(false)}
+                >
+                  <div className="px-3.5 py-2 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-900 truncate">{user.name}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{user.email}</p>
+                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-medium text-[10px]">
+                      {user.role}
+                    </span>
+                  </div>
+
+                  <div className="py-1">
+                    <Link
+                      to="/settings"
+                      className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                      Settings & Thresholds
+                    </Link>
+                    <Link
+                      to="/data-sources"
+                      className="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      Data Sources & Sync
+                    </Link>
+                  </div>
+
+                  <div className="pt-1 border-t border-slate-100">
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-left px-3.5 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 font-medium transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link to="/login">
+              <Button size="sm" variant="primary">
+                Sign In
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
     </header>

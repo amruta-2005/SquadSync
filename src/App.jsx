@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './auth/AuthProvider';
+import ProtectedRoute from './auth/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
 
 import LandingPage from './pages/LandingPage';
@@ -11,26 +13,41 @@ import IntegrationRiskPage from './pages/IntegrationRiskPage';
 import DataSourcesPage from './pages/DataSourcesPage';
 import RisksPage from './pages/RisksPage';
 import SettingsDocsPage from './pages/SettingsDocsPage';
+import Login from './pages/Login';
+import Register from './pages/Register';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<LandingPage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="workload" element={<WorkloadPage />} />
-            <Route path="reviews" element={<ReviewsPage />} />
-            <Route path="integration-risks" element={<IntegrationRiskPage />} />
-            <Route path="data-sources" element={<DataSourcesPage />} />
-            <Route path="risks" element={<RisksPage />} />
-            <Route path="settings" element={<SettingsDocsPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public standalone auth routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            {/* Public landing page within app layout */}
+            <Route path="/" element={<AppLayout />}>
+              <Route index element={<LandingPage />} />
+
+              {/* Protected feature routes wrapped in ProtectedRoute */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="workload" element={<WorkloadPage />} />
+                <Route path="reviews" element={<ReviewsPage />} />
+                <Route path="integration-risks" element={<IntegrationRiskPage />} />
+                <Route path="data-sources" element={<DataSourcesPage />} />
+                <Route path="risks" element={<RisksPage />} />
+                <Route path="settings" element={<SettingsDocsPage />} />
+              </Route>
+
+              {/* Fallback 404 route */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
+    </AuthProvider>
   );
 }
